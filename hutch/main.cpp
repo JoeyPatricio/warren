@@ -1,13 +1,28 @@
-#include <cstdlib>
+#include <cstdio>
 #include <iostream>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
-int send_wol(const char *mac_address);
+void handle_client(int clientSocket);
 
 int main() {
-  const char *wol_addr = std::getenv("WOL_ADDR");
-  if (wol_addr == nullptr) {
-    std::cerr << "WOL_ADDR is not set\n";
-    return 1;
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  sockaddr_in serverAddress;
+  serverAddress.sin_family = AF_INET;
+  serverAddress.sin_port = htons(8080);
+  serverAddress.sin_addr.s_addr = INADDR_ANY;
+  if (bind(fd, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+    std::cerr << "Socket bind failed\n";
+    return -1;
   }
-  return send_wol(wol_addr) == 0 ? 0 : 1;
+  listen(fd, 5);
+  while (true) {
+    int clientSocket = accept(fd, nullptr, nullptr);
+    if (clientSocket < 0) {
+      std::perror("accept");
+      continue;
+    }
+    handle_client(clientSocket);
+  }
 }
