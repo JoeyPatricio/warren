@@ -1,5 +1,4 @@
 #include <cstdio>
-#include <cstdlib>
 #include <iostream>
 #include <string>
 #include <sys/socket.h>
@@ -7,34 +6,33 @@
 
 int send_wol(const char *mac_address);
 
-int wol();
-
-// Thump sends one command and then closes its end, so read until EOF.
-void handle_client(int clientSocket) {
+// Thump sends one command and then shuts down its write side, so read until
+// EOF. The reply is "ok" or an error message.
+void handle_client(int clientSocket, const char *wol_addr) {
   std::string message;
   char buffer[1024];
   ssize_t n;
   while ((n = recv(clientSocket, buffer, sizeof(buffer), 0)) > 0) {
     message.append(buffer, n);
   }
-  close(clientSocket);
   if (n < 0) {
     std::perror("recv");
+    close(clientSocket);
     return;
   }
   std::cout << "Message from client: " << message << "\n";
+  std::string reply = "ok";
   if (message == "wake") {
-    wol();
+    if (send_wol(wol_addr) != 0) {
+      reply = "could not send wake packet";
+    }
   } else {
     std::cerr << "Unknown command: " << message << "\n";
+    reply = "unknown command";
   }
-}
-
-int wol() {
-  const char *wol_addr = std::getenv("WOL_ADDR");
-  if (wol_addr == nullptr) {
-    std::cerr << "WOL_ADDR is not set\n";
-    return 1;
+  // Without MSG_NOSIGNAL, a client that already disconnected would kill Hutch.
+  if (send(clientSocket, reply.data(), reply.size(), MSG_NOSIGNAL) < 0) {
+    std::perror("send");
   }
-  return send_wol(wol_addr) == 0 ? 0 : 1;
+  close(clientSocket);
 }

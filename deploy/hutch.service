@@ -1,0 +1,19 @@
+[Unit]
+Description=Hutch, Warren job coordinator
+After=network.target
+
+[Service]
+Type=simple
+User=warren
+Group=warren
+EnvironmentFile=/etc/warren/hutch.env
+ExecStart=/usr/local/bin/hutch
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
