@@ -1,6 +1,6 @@
 # Warren
 
-**Warren** Workstation access system for GPU job scheduling with Wake on Lan. 
+**Warren** Workstation remote access system for GPU job scheduling with Wake on Lan. 
 
 ```
  Laptop             Raspberry Pi (always on)         Workstation (asleep)
