@@ -1,55 +1,44 @@
-#include <cstdio>
+#include "commands/commands.hpp"
+
 #include <cstdlib>
-#include <cstring>
 #include <iostream>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <string_view>
 
-int send_command(const char *command);
+struct Command {
+  std::string_view name;
+  std::string_view description;
+  int (*run)(const Context &context, const Args &args);
+};
 
-int main(int argc, char **argv) {
-  if (argc < 2 || std::strcmp(argv[1], "wake") != 0) {
-    std::cerr << "Usage: thump wake\n";
-    return 1;
+const Command commands[] = {
+    {"wake", "Wake the workstation", run_wake},
+};
+
+void print_usage() {
+  std::cerr << "Usage: thump <command> [args]\n\nCommands:\n";
+  for (const Command &command : commands) {
+    std::cerr << "  " << command.name << "\t" << command.description << "\n";
   }
-  return send_command(argv[1]) == 0 ? 0 : 1;
 }
 
-int send_command(const char *command) {
-  const char *hutch_addr = std::getenv("HUTCH_ADDR");
-  if (hutch_addr == nullptr) {
-    std::cerr << "HUTCH_ADDR is not set\n";
-    return -1;
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    print_usage();
+    return 2;
   }
-  addrinfo hints{};
-  hints.ai_family = AF_INET;
-  hints.ai_socktype = SOCK_STREAM;
-  addrinfo *addr;
-  int err = getaddrinfo(hutch_addr, "8080", &hints, &addr);
-  if (err != 0) {
-    std::cerr << "Could not resolve " << hutch_addr << ": "
-              << gai_strerror(err) << "\n";
-    return -1;
+  std::string_view name = argv[1];
+  for (const Command &command : commands) {
+    if (command.name != name) {
+      continue;
+    }
+    const char *hutch_addr = std::getenv("HUTCH_ADDR");
+    if (hutch_addr == nullptr) {
+      std::cerr << "HUTCH_ADDR is not set\n";
+      return 1;
+    }
+    return command.run(Context{hutch_addr}, Args(argv + 2, argv + argc));
   }
-  int clientSocket = socket(addr->ai_family, addr->ai_socktype, 0);
-  if (clientSocket < 0) {
-    std::perror("socket");
-    freeaddrinfo(addr);
-    return -1;
-  }
-  int connected = connect(clientSocket, addr->ai_addr, addr->ai_addrlen);
-  freeaddrinfo(addr);
-  if (connected < 0) {
-    std::perror("connect");
-    close(clientSocket);
-    return -1;
-  }
-  if (send(clientSocket, command, std::strlen(command), 0) < 0) {
-    std::perror("send");
-    close(clientSocket);
-    return -1;
-  }
-  close(clientSocket);
-  return 0;
+  std::cerr << "Unknown command: " << name << "\n";
+  print_usage();
+  return 2;
 }
