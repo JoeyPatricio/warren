@@ -10,7 +10,7 @@
 
 - **Hutch** is the coordinator daemon on the Pi.
 - **Thump** is the CLI. It reaches Hutch over [Tailscale](https://tailscale.com).
-- **The Warren worker** runs on the workstation, execute jobs, and suspend the machine when the queue is empty.
+- **Worker** runs on the workstation, execute jobs, and suspend the machine when the queue is empty.
 
 ## Build
 
