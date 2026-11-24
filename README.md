@@ -1,16 +1,42 @@
 # Warren
 
-**Warren** is a self-hosted GPU job scheduler.
+**Warren** Workstation access system for GPU job scheduling with Wake on Lan. 
 
-- **Hutch** is the coordinator. It runs on a Raspberry Pi, queues GPU jobs from anywhere, wakes the workstation to run them, and puts it back to sleep when the queue is empty.
-- **Thump** is the CLI. You use it to submit jobs from the laptop or phone over [Tailscale](https://tailscale.com).
+```
+ Laptop             Raspberry Pi (always on)         Workstation (asleep)
+ thump  --TCP-->    hutch  --Wake-on-LAN-->          network card
+        Tailscale                    LAN
+```
 
-## Build and run
+- **Hutch** is the coordinator daemon on the Pi.
+- **Thump** is the CLI. It reaches Hutch over [Tailscale](https://tailscale.com).
+- **The Warren worker** runs on the workstation, execute jobs, and suspend the machine when the queue is empty.
+
+## Build
+
+Requires Linux, CMake 3.20, and a C++17 compiler.
 
 ```sh
 cmake -S . -B build
 cmake --build build
-WOL_ADDR=aa:bb:cc:dd:ee:ff ./build/hutch/hutch
 ```
 
-`WOL_ADDR` is the MAC address of the workstation's wired network card. The workstation needs Wake-on-LAN enabled in its BIOS and on that card.
+## Run
+
+On the Pi, put the MAC address of the workstation's wired network card in `.env`. Wake-on-LAN must be enabled in the workstation's BIOS and on that card.
+
+```sh
+echo 'WOL_ADDR=aa:bb:cc:dd:ee:ff' > .env
+sh deploy/install.sh
+sudo journalctl -u hutch -f
+```
+
+On the laptop:
+
+```sh
+cmake --install build --prefix ~/.local
+export HUTCH_ADDR=100.x.y.z  # the Pi's Tailscale address
+thump wake
+```
+
+Hutch listens on port 8080 on all interfaces and has no authentication yet, so it belongs on a trusted network.
