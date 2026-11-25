@@ -6,6 +6,9 @@
 #include <cstdio>
 #include <iostream>
 #include <iterator>
+#include <optional>
+#include <sqlite3.h>
+#include <sstream>
 #include <string>
 #include <sys/epoll.h>
 #include <sys/signalfd.h>
@@ -13,8 +16,11 @@
 #include <sys/timerfd.h>
 #include <unistd.h>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
+std::optional<std::int64_t> queue_job(sqlite3 *db,
+                                      const std::vector<std::string> &job);
 int send_wol(const char *mac_address);
 
 using Clock = std::chrono::steady_clock;
@@ -34,6 +40,7 @@ struct Server {
   int listener;
   int timer;
   const char *wol_addr;
+  sqlite3 *db;
   std::unordered_map<int, Client> clients;
 };
 
@@ -60,13 +67,29 @@ int arm_timer(int timer, Clock::duration delay) {
   return 0;
 }
 
-// The reply is "ok" or an error message.
-std::string handle_request(const std::string &message, const char *wol_addr) {
-  std::cout << "Command from client: " << message << "\n";
-  if (message == "wake") {
+// NUL separates the command name from its arguments. The reply is "ok", "ok"
+// and a space before a result, or an error message.
+std::string handle_request(const std::string &message, const char *wol_addr,
+                           sqlite3 *db) {
+  std::istringstream request(message);
+  std::string command;
+  std::getline(request, command, '\0');
+  std::cout << "Command from client: " << command << "\n";
+  if (command == "wake") {
     return send_wol(wol_addr) == 0 ? "ok" : "could not send wake packet";
   }
-  std::cerr << "Unknown command: " << message << "\n";
+  if (command == "submit") {
+    std::vector<std::string> job;
+    for (std::string arg; std::getline(request, arg, '\0');) {
+      job.push_back(std::move(arg));
+    }
+    if (job.empty() || job[0].empty()) {
+      return "no command to run";
+    }
+    std::optional<std::int64_t> id = queue_job(db, job);
+    return id ? "ok " + std::to_string(*id) : "could not queue job";
+  }
+  std::cerr << "Unknown command: " << command << "\n";
   return "unknown command";
 }
 
@@ -130,7 +153,8 @@ int read_client(Server &server, int fd, Client &client) {
   }
   std::string reply = client.request.size() > max_request
                           ? "request too large"
-                          : handle_request(client.request, server.wol_addr);
+                          : handle_request(client.request, server.wol_addr,
+                                           server.db);
   // A reply is one short line on an unused send buffer, so it always fits.
   // Without MSG_NOSIGNAL, a client that already disconnected would kill Hutch.
   if (send(fd, reply.data(), reply.size(), MSG_NOSIGNAL) < 0) {
@@ -169,7 +193,7 @@ int expire_clients(Server &server) {
 
 // Returns 0 after SIGTERM or SIGINT, or -1 on an error. The listener must be
 // nonblocking.
-int run_server(int listener, const char *wol_addr) {
+int run_server(int listener, const char *wol_addr, sqlite3 *db) {
   sigset_t stop_signals;
   sigemptyset(&stop_signals);
   sigaddset(&stop_signals, SIGTERM);
@@ -197,7 +221,7 @@ int run_server(int listener, const char *wol_addr) {
       watch(epoll, signals) < 0) {
     return -1;
   }
-  Server server{epoll, listener, timer, wol_addr, {}};
+  Server server{epoll, listener, timer, wol_addr, db, {}};
   epoll_event events[16];
   while (true) {
     int count = epoll_wait(epoll, events, std::size(events), -1);

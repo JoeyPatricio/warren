@@ -8,6 +8,7 @@ User=warren
 Group=warren
 EnvironmentFile=/etc/warren/hutch.env
 ExecStart=/usr/local/bin/hutch
+StateDirectory=warren
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=yes
