@@ -42,7 +42,8 @@ int send_command(const char *hutch_addr, const char *command) {
     close(clientSocket);
     return -1;
   }
-  if (send(clientSocket, command, std::strlen(command), 0) < 0) {
+  // Without MSG_NOSIGNAL, Hutch closing early would kill Thump with no message.
+  if (send(clientSocket, command, std::strlen(command), MSG_NOSIGNAL) < 0) {
     std::perror("send");
     close(clientSocket);
     return -1;
