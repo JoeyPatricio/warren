@@ -33,7 +33,8 @@ int send_command(const char *hutch_addr, const char *command) {
     close(clientSocket);
     return -1;
   }
-  // Longer than Hutch's 5 s limit on an idle client that may be ahead of us.
+  // Longer than Hutch's 5 s limit on a client, so a full Hutch has time to make
+  // room for us.
   timeval timeout{10, 0};
   if (setsockopt(clientSocket, SOL_SOCKET, SO_RCVTIMEO, &timeout,
                  sizeof(timeout)) < 0) {
