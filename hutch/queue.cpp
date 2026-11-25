@@ -10,7 +10,9 @@ int create_jobs_table(sqlite3 *db) {
   // AUTOINCREMENT keeps the ID of a deleted job from being reused.
   const char *sql = "CREATE TABLE IF NOT EXISTS jobs ("
                     "ID INTEGER PRIMARY KEY AUTOINCREMENT, "
-                    "Job BLOB NOT NULL);";
+                    "Job BLOB NOT NULL, "
+                    "State TEXT NOT NULL DEFAULT 'queued' CHECK (State IN "
+                    "('queued', 'running', 'done', 'failed', 'cancelled')));";
   if (sqlite3_exec(db, sql, nullptr, nullptr, nullptr) != SQLITE_OK) {
     std::cerr << "Could not create jobs table: " << sqlite3_errmsg(db) << "\n";
     return -1;
