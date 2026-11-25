@@ -12,6 +12,7 @@ struct Command {
 
 const Command commands[] = {
     {"wake", "Wake the workstation", run_wake},
+    {"submit", "Submit a job to be run", run_submit},
 };
 
 void print_usage() {

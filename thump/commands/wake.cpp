@@ -8,5 +8,5 @@ int run_wake(const Context &context, const Args &args) {
     std::cerr << "Usage: thump wake\n";
     return 2;
   }
-  return send_command(context.hutch_addr, "wake") == 0 ? 0 : 1;
+  return send_command(context.hutch_addr, "wake") ? 0 : 1;
 }

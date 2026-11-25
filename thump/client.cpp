@@ -1,15 +1,14 @@
 #include "client.hpp"
 
 #include <cstdio>
-#include <cstring>
 #include <iostream>
 #include <netdb.h>
-#include <string>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
 
-int send_command(const char *hutch_addr, const char *command) {
+std::optional<std::string> send_command(const char *hutch_addr,
+                                        std::string_view command) {
   addrinfo hints{};
   hints.ai_family = AF_INET;
   hints.ai_socktype = SOCK_STREAM;
@@ -18,20 +17,20 @@ int send_command(const char *hutch_addr, const char *command) {
   if (err != 0) {
     std::cerr << "Could not resolve " << hutch_addr << ": "
               << gai_strerror(err) << "\n";
-    return -1;
+    return std::nullopt;
   }
   int clientSocket = socket(addr->ai_family, addr->ai_socktype, 0);
   if (clientSocket < 0) {
     std::perror("socket");
     freeaddrinfo(addr);
-    return -1;
+    return std::nullopt;
   }
   int connected = connect(clientSocket, addr->ai_addr, addr->ai_addrlen);
   freeaddrinfo(addr);
   if (connected < 0) {
     std::perror("connect");
     close(clientSocket);
-    return -1;
+    return std::nullopt;
   }
   // Longer than Hutch's 5 s limit on a client, so a full Hutch has time to make
   // room for us.
@@ -40,19 +39,19 @@ int send_command(const char *hutch_addr, const char *command) {
                  sizeof(timeout)) < 0) {
     std::perror("setsockopt(SO_RCVTIMEO)");
     close(clientSocket);
-    return -1;
+    return std::nullopt;
   }
   // Without MSG_NOSIGNAL, Hutch closing early would kill Thump with no message.
-  if (send(clientSocket, command, std::strlen(command), MSG_NOSIGNAL) < 0) {
+  if (send(clientSocket, command.data(), command.size(), MSG_NOSIGNAL) < 0) {
     std::perror("send");
     close(clientSocket);
-    return -1;
+    return std::nullopt;
   }
   // Hutch reads until EOF before it replies.
   if (shutdown(clientSocket, SHUT_WR) < 0) {
     std::perror("shutdown");
     close(clientSocket);
-    return -1;
+    return std::nullopt;
   }
   std::string reply;
   char buffer[1024];
@@ -63,16 +62,19 @@ int send_command(const char *hutch_addr, const char *command) {
   if (n < 0) {
     std::perror("recv");
     close(clientSocket);
-    return -1;
+    return std::nullopt;
   }
   close(clientSocket);
   if (reply.empty()) {
     std::cerr << "Hutch closed the connection without replying\n";
-    return -1;
+    return std::nullopt;
   }
-  if (reply != "ok") {
-    std::cerr << "Hutch: " << reply << "\n";
-    return -1;
+  if (reply == "ok") {
+    return "";
   }
-  return 0;
+  if (reply.compare(0, 3, "ok ") == 0) {
+    return reply.substr(3);
+  }
+  std::cerr << "Hutch: " << reply << "\n";
+  return std::nullopt;
 }
